@@ -31,9 +31,11 @@ _LOGGER = logging.getLogger(__name__)
 
 CONF_SOURCES = "sources"
 CONF_MAX_VOLUME = "max_volume"
+CONF_RECEIVER_MAX_VOLUME = "max_volume"
 
 DEFAULT_NAME = "Onkyo Receiver"
 SUPPORTED_MAX_VOLUME = 80
+RECEIVER_MAX_VOLUME = 164
 
 SUPPORT_ONKYO = (
     SUPPORT_VOLUME_SET
@@ -77,7 +79,7 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
         vol.Optional(CONF_HOST): cv.string,
         vol.Optional(CONF_NAME, default=DEFAULT_NAME): cv.string,
         vol.Optional(CONF_MAX_VOLUME, default=SUPPORTED_MAX_VOLUME): vol.All(
-            vol.Coerce(int), vol.Range(min=1, max=SUPPORTED_MAX_VOLUME)
+            vol.Coerce(int), vol.Range(min=1, max=164)
         ),
         vol.Optional(CONF_SOURCES, default=DEFAULT_SOURCES): {cv.string: cv.string},
     }
@@ -178,6 +180,7 @@ def setup_platform(hass, config, add_entities, discovery_info=None):
                         receiver,
                         config.get(CONF_SOURCES),
                         name="{} Zone 2".format(config[CONF_NAME]),
+                        max_volume=config.get(CONF_MAX_VOLUME)
                     )
                 )
             # Add Zone3 if available
@@ -189,6 +192,7 @@ def setup_platform(hass, config, add_entities, discovery_info=None):
                         receiver,
                         config.get(CONF_SOURCES),
                         name="{} Zone 3".format(config[CONF_NAME]),
+                        max_volume=config.get(CONF_MAX_VOLUME)
                     )
                 )
         except OSError:
@@ -266,7 +270,9 @@ class OnkyoDevice(MediaPlayerDevice):
             else:
                 self._current_source = "_".join([i for i in current_source_tuples[1]])
         self._muted = bool(mute_raw[1] == "on")
-        self._volume = volume_raw[1] / self._max_volume
+#       AMP_VOL/MAX_RECEIVER_VOL*(MAX_VOL/100)
+        self._volume = volume_raw[1] / RECEIVER_MAX_VOLUME * (self._max_volume / 100)
+#       self._volume = volume_raw[1] / self._max_volume
 
         if not hdmi_out_raw:
             return
@@ -323,7 +329,9 @@ class OnkyoDevice(MediaPlayerDevice):
         Onkyo ranges from 1-80 however 80 is usually far too loud
         so allow the user to specify the upper range with CONF_MAX_VOLUME
         """
-        self.command("volume {}".format(int(volume * self._max_volume)))
+#        HA_VOL * (MAX VOL / 100) * MAX_RECEIVER_VOL
+        self.command("volume {}".format(int(volume * (self._max_volume / 100) * RECEIVER_MAX_VOLUME)))
+#        self.command("volume {}".format(int(volume * self._max_volume)))
 
     def volume_up(self):
         """Increase volume by 1 step."""
@@ -364,11 +372,11 @@ class OnkyoDevice(MediaPlayerDevice):
 class OnkyoDeviceZone(OnkyoDevice):
     """Representation of an Onkyo device's extra zone."""
 
-    def __init__(self, zone, receiver, sources, name=None):
+    def __init__(self, zone, receiver, sources, name=None, max_volume=SUPPORTED_MAX_VOLUME):
         """Initialize the Zone with the zone identifier."""
         self._zone = zone
         self._supports_volume = True
-        super(OnkyoDeviceZone, self).__init__(receiver, sources, name)
+        super(OnkyoDeviceZone, self).__init__(receiver, sources, name, max_volume)
 
     def update(self):
         """Get the latest state from the device."""
@@ -413,7 +421,9 @@ class OnkyoDeviceZone(OnkyoDevice):
         self._muted = bool(mute_raw[1] == "on")
 
         if self._supports_volume:
-            self._volume = volume_raw[1] / 80.0
+            #       AMP_VOL/MAX_RECEIVER_VOL*(MAX_VOL/100)
+            self._volume = volume_raw[1] / RECEIVER_MAX_VOLUME * (self._max_volume / 100)
+            #       self._volume = volume_raw[1] / self._max_volume
 
     @property
     def supported_features(self):
@@ -428,7 +438,9 @@ class OnkyoDeviceZone(OnkyoDevice):
 
     def set_volume_level(self, volume):
         """Set volume level, input is range 0..1. Onkyo ranges from 1-80."""
-        self.command("zone{}.volume={}".format(self._zone, int(volume * 80)))
+        #        HA_VOL * (MAX VOL / 100) * MAX_RECEIVER_VOL
+        # self.command("zone{}.volume={}".format(self._zone, int(volume * 80)))
+        self.command("zone{}.volume={}".format(self._zone, int(volume * (self._max_volume / 100) * RECEIVER_MAX_VOLUME)))
 
     def volume_up(self):
         """Increase volume by 1 step."""
