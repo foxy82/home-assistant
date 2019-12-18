@@ -129,7 +129,11 @@ def setup(hass, config):
 
     if dummy_connection:
         rfx_object = rfxtrxmod.Connect(
-            device, None, debug=debug, transport_protocol=rfxtrxmod.DummyTransport2
+            device,
+            None,
+            debug=debug,
+            transport_protocol=rfxtrxmod.DummyTransport2,
+            logger=_LOGGER,
         )
     elif port is not None:
         # If port is set then we create a TCP connection
@@ -138,9 +142,10 @@ def setup(hass, config):
             None,
             debug=debug,
             transport_protocol=rfxtrxmod.PyNetworkTransport,
+            logger=_LOGGER,
         )
     else:
-        rfx_object = rfxtrxmod.Connect(device, None, debug=debug)
+        rfx_object = rfxtrxmod.Connect(device, None, debug=debug, logger=_LOGGER,)
 
     def _start_rfxtrx(event):
         rfx_object.event_callback = handle_receive
@@ -251,7 +256,6 @@ def find_possible_pt2262_device(device_id):
 def get_devices_from_config(config, device):
     """Read rfxtrx configuration."""
     signal_repetitions = config[CONF_SIGNAL_REPETITIONS]
-
     devices = []
     for packet_id, entity_info in config[CONF_DEVICES].items():
         event = get_rfx_object(packet_id)
