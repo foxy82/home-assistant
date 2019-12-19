@@ -1,0 +1,9 @@
+{
+    "domain": "warmup",
+    "name": "warmup",
+    "config_flow": false,
+    "documentation": "https://www.home-assistant.io/integrations/warmup",
+    "requirements": ["warmup4ie==0.1.5"],
+    "dependencies": [],
+    "codeowners": ["@foxy82"]
+}
