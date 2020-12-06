@@ -1294,6 +1294,9 @@ pyblackbird==0.5
 # homeassistant.components.bluetooth_tracker
 # pybluez==0.22
 
+# homeassistant.components.blustream
+pyblustream==0.1
+
 # homeassistant.components.neato
 pybotvac==0.0.17
 

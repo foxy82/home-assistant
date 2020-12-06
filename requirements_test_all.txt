@@ -654,6 +654,9 @@ pyatv==0.7.3
 # homeassistant.components.blackbird
 pyblackbird==0.5
 
+# homeassistant.components.blustream
+pyblustream==0.1
+
 # homeassistant.components.neato
 pybotvac==0.0.17
 
