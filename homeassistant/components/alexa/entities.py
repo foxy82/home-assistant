@@ -62,6 +62,7 @@ from .capabilities import (
     AlexaPowerController,
     AlexaPowerLevelController,
     AlexaRangeController,
+    AlexaRTCSessionController,
     AlexaSceneController,
     AlexaSecurityPanelController,
     AlexaSeekController,
@@ -851,7 +852,15 @@ class CameraCapabilities(AlexaEntity):
         if self._check_requirements():
             supported = self.entity.attributes.get(ATTR_SUPPORTED_FEATURES, 0)
             if supported & camera.SUPPORT_STREAM:
-                yield AlexaCameraStreamController(self.entity)
+                entity_conf = self.config.entity_config.get(self.entity.entity_id, {})
+                if (
+                    CONF_DISPLAY_CATEGORIES in entity_conf
+                    and entity_conf[CONF_DISPLAY_CATEGORIES] == DisplayCategory.DOORBELL
+                ):
+                    yield AlexaDoorbellEventSource(self.entity)
+                    yield AlexaRTCSessionController(self.entity)
+                else:
+                    yield AlexaCameraStreamController(self.entity)
 
         yield AlexaEndpointHealth(self.hass, self.entity)
         yield Alexa(self.hass)

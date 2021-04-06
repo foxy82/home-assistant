@@ -2,6 +2,9 @@
 import logging
 import math
 
+from aiortc import RTCPeerConnection, RTCSessionDescription
+from aiortc.contrib.media import MediaPlayer
+
 from homeassistant import core as ha
 from homeassistant.components import (
     camera,
@@ -1525,4 +1528,126 @@ async def async_api_initialize_camera_stream(hass, config, directive, context):
     }
     return directive.response(
         name="Response", namespace="Alexa.CameraStreamController", payload=payload
+    )
+
+
+# TODO should there be here or somewhere else?
+peer_connections = set()
+session_to_peer_connections = {}
+player = None
+
+
+@HANDLERS.register(("Alexa.RTCSessionController", "InitiateSessionWithOffer"))
+async def async_api_initiate_session_with_offer(hass, config, directive, context):
+    global player
+    """Process a InitializeCameraStreams request."""
+    # Example? https://github.com/aiortc/aiortc/blob/main/examples/webcam/webcam.py
+    print("Initial session with offer")
+    entity = directive.entity
+
+    try:
+        external_url = network.get_url(
+            hass,
+            allow_internal=False,
+            allow_ip=False,
+            require_ssl=True,
+            require_standard_port=True,
+        )
+    except network.NoURLAvailableError as err:
+        raise AlexaInvalidValueError(
+            "Failed to find suitable URL to serve to Alexa"
+        ) from err
+
+    session_id = directive.payload["sessionId"]
+    sdp_offer_value = directive.payload["offer"]["value"]
+    sdp_offer_value += "a=fmtp:99 profile-level-id=42001f;packetization-mode=1\n"
+
+    offer = RTCSessionDescription(sdp=sdp_offer_value, type="offer")
+
+    _LOGGER.info(f"Initiating session for id: {session_id}")
+
+    # This doesn't work at the moment
+    stream_source = await camera.async_request_stream(hass, entity.entity_id, fmt="hls")
+    stream_url = f"{external_url}{stream_source}"
+    if player is None:
+        print("Creeating player")
+        # options = {"framerate": "30", "video_size": "640x480"}
+        player = MediaPlayer(stream_url)
+        print("Created player")
+
+    pc = RTCPeerConnection()
+
+    @pc.on("signalingstatechange")
+    async def on_signalingstatechange():
+        print("signalingstatechange is %s" % pc.signalingState)
+
+    @pc.on("connectionstatechange")
+    async def on_connectionstatechange():
+        print("Connection state is %s" % pc.connectionState)
+        if pc.connectionState == "failed":
+            await pc.close()
+            session_to_peer_connections[session_id] = None
+
+    @pc.on("iceconnectionstatechange")
+    async def on_iceconnectionstatechange():
+        print("Ice connection state is %s" % pc.iceConnectionState)
+
+    @pc.on("icegatheringstatechange")
+    async def on_icegatheringstatechange():
+        print("icegatheringstatechange state is %s" % pc.iceGatheringState)
+
+    await pc.setRemoteDescription(offer)
+
+    for t in pc.getTransceivers():
+        if t.kind == "video" and player.video:
+            pc.addTrack(player.video)
+        # We don't support audio yet but leaving here for a hint if we ever do
+        # elif t.kind == "audio" and player.audio:
+        #    pc.addTrack(player.audio)
+
+    answer = await pc.createAnswer()
+    await pc.setLocalDescription(answer)
+
+    print(pc.localDescription.sdp)
+
+    session_to_peer_connections[session_id] = pc
+
+    payload = {"answer": {"format": "SDP", "value": pc.localDescription.sdp}}
+    _LOGGER.info(f"Initiated session for id: {session_id}")
+    return directive.response(
+        name="AnswerGeneratedForSession",
+        namespace="Alexa.RTCSessionController",
+        payload=payload,
+    )
+
+
+@HANDLERS.register(("Alexa.RTCSessionController", "SessionConnected"))
+async def async_api_session_connected(hass, config, directive, context):
+    """Process a SessionConnected request."""
+    session_id = directive.payload["sessionId"]
+    payload = {"sessionId": session_id}
+    _LOGGER.info(f"Connected session for id: {session_id}")
+    return directive.response(
+        name="SessionConnected", namespace="Alexa.RTCSessionController", payload=payload
+    )
+
+
+@HANDLERS.register(("Alexa.RTCSessionController", "SessionDisconnected"))
+async def async_api_session_disconnected(hass, config, directive, context):
+    """Process a SessionDisconnected request."""
+    session_id = directive.payload["sessionId"]
+    _LOGGER.info(f"Disconnecting session for id: {session_id}")
+    pc = session_to_peer_connections[session_id]
+    if pc is not None:
+        session_to_peer_connections[session_id] = None
+        await pc.close()
+    else:
+        _LOGGER.debug(f"Can't find RTC Session for session ID: {session_id}")
+
+    payload = {"sessionId": session_id}
+    _LOGGER.info(f"Disconnected session for id: {session_id}")
+    return directive.response(
+        name="SessionDisconnected",
+        namespace="Alexa.RTCSessionController",
+        payload=payload,
     )

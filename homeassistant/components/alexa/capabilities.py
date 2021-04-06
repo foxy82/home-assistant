@@ -2016,3 +2016,32 @@ class AlexaCameraStreamController(AlexaCapability):
                 "audioCodecs": ["AAC"],
             }
         ]
+
+
+class AlexaRTCSessionController(AlexaCapability):
+    """Implements Alexa.RTCSessionController.
+
+    https://developer.amazon.com/en-US/docs/alexa/device-apis/alexa-rtcsessioncontroller.html
+    """
+
+    supported_locales = {
+        "de-DE",
+        "en-AU",
+        "en-CA",
+        "en-GB",
+        "en-US",
+        "es-ES",
+        "fr-FR",
+        "it-IT",
+        "ja-JP",
+    }
+
+    def name(self):
+        """Return the Alexa API name of this interface."""
+        return "Alexa.RTCSessionController"
+
+    def configuration(self):
+        """Return configuration object."""
+        # False for isFullDuplexAudioSupported not supporting audio in initial version.
+        configuration = {"isFullDuplexAudioSupported": False}
+        return configuration

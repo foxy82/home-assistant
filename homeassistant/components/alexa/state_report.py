@@ -57,6 +57,49 @@ async def async_enable_proactive_mode(hass, smart_home_config):
         if new_state.domain not in ENTITY_ADAPTERS:
             return
 
+        # TODO refactor this - probably best to move binary_sensor to config on the DOORBELL
+        if new_state.domain == "binary_sensor":
+            print(new_state)
+            print(new_state.entity_id)
+            # find a camera that matches.
+            print("1")
+            for s in smart_home_config.entity_config:
+                print(s)
+                state = hass.states.get(s)
+                print(state)
+                if state:
+                    doorbell = state.attributes.get("doorbell", None)
+                    print(doorbell)
+                    if doorbell == new_state.entity_id:
+                        print("Match: ")
+                        print(s)
+                        alexa_changed_entity: AlexaEntity = ENTITY_ADAPTERS[
+                            state.domain
+                        ](hass, smart_home_config, state)
+                        # Determine how entity should be reported on
+                        should_report = False
+                        should_doorbell = False
+
+                        for interface in alexa_changed_entity.interfaces():
+                            if (
+                                not should_report
+                                and interface.properties_proactively_reported()
+                            ):
+                                should_report = True
+
+                            if interface.name() == "Alexa.DoorbellEventSource":
+                                should_doorbell = True
+                                break
+
+                        if not should_report and not should_doorbell:
+                            return
+
+                        if should_doorbell:
+                            if new_state.state == STATE_ON:
+                                await async_send_doorbell_event_message(
+                                    hass, smart_home_config, alexa_changed_entity
+                                )
+
         if not smart_home_config.should_expose(changed_entity):
             _LOGGER.debug("Not exposing %s because filtered by config", changed_entity)
             return
