@@ -38,6 +38,7 @@ DEFAULT_PORT = 60128
 
 CONF_SOURCES = "sources"
 CONF_MAX_VOLUME = "max_volume"
+CONF_ZONES = "zones"
 
 DEFAULT_NAME = "Onkyo Receiver"
 SUPPORTED_MAX_VOLUME = 90
@@ -160,6 +161,13 @@ SUPPORT_ONKYO_WO_SOUND_MODE = (
     | SUPPORT_PLAY_MEDIA
 )
 
+ZONE_SCHEMA = vol.Schema(
+    {
+        vol.Optional(CONF_NAME): cv.string,
+        vol.Optional(CONF_MAX_VOLUME): vol.All(vol.Coerce(int), vol.Range(min=1)),
+    }
+)
+
 PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
     {
         vol.Optional(CONF_HOST): cv.string,
@@ -169,6 +177,7 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
             vol.Coerce(int), vol.Range(min=1)
         ),
         vol.Optional(CONF_SOURCES, default=DEFAULT_SOURCES): {cv.string: cv.string},
+        vol.Optional(CONF_ZONES): vol.Schema({vol.In(ZONES.keys()): ZONE_SCHEMA}),
     }
 )
 
@@ -227,6 +236,7 @@ async def async_setup_platform(hass, config, async_add_entities, discovery_info=
     name = config[CONF_NAME]
     max_volume = config[CONF_MAX_VOLUME]
     sources = config[CONF_SOURCES]
+    zone_config = config.get(CONF_ZONES, {})
 
     platform = entity_platform.current_platform.get()
     platform.async_register_entity_service(
@@ -263,8 +273,12 @@ async def async_setup_platform(hass, config, async_add_entities, discovery_info=
         # So we create an entity for the zone and add it to active_zones
         if zone in ZONES:
             _LOGGER.debug("Discovered %s on %s,", ZONES[zone], avr.name)
+            # Use configured values or default.
+            config_for_zone = zone_config.get(zone, {})
+            zone_name = config_for_zone.get(CONF_NAME, f"{name} {ZONES[zone]}")
+            zone_max_volume = config_for_zone.get(CONF_MAX_VOLUME, max_volume)
             zone_entity = OnkyoAVR(
-                avr, avr.name, avr.identifier, sources, zone, max_volume
+                avr, zone_name, avr.identifier, sources, zone, zone_max_volume
             )
             active_zones[avr.host][zone] = zone_entity
             async_add_entities([zone_entity])
@@ -343,7 +357,7 @@ class OnkyoAVR(MediaPlayerEntity):
         """Initialize entity with transport."""
         super().__init__()
         self._avr = avr
-        self._name = f"{name} {ZONES[zone] if zone != 'main' else ''}"
+        self._name = name
         if identifier is not None:
             self._unique_id = f"{identifier}_{zone}"
         else:
