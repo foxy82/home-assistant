@@ -2091,7 +2091,7 @@
     "geo_json_events": {
       "name": "GeoJSON",
       "integration_type": "service",
-      "config_flow": true,
+      "config_flow": false,
       "iot_class": "cloud_polling"
     },
     "geo_rss_events": {
@@ -4127,7 +4127,7 @@
     "onkyo": {
       "name": "Onkyo",
       "integration_type": "hub",
-      "config_flow": false,
+      "config_flow": true,
       "iot_class": "local_polling"
     },
     "onvif": {
